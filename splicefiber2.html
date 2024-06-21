@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Splice the Fiber</title>
+    <link rel="icon" type="image/png" href="favicon.png"> <!-- Favicon -->
+    <link rel="apple-touch-icon" href="logo192.jpg"> <!-- Webclip -->
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        #gameContainer {
+            position: relative;
+        }
+        canvas {
+            border: 1px solid black;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        #menu {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: #ffffff;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        #menu h2 {
+            margin-top: 0;
+            font-size: 24px;
+            color: #4CAF50;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+        button {
+            margin: 10px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            background-color: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        button:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+        #menuButton {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+        }
+        #menuButton:hover {
+            background-color: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        #menuButton:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="400" height="400"></canvas>
+        <div id="menu">
+            <h2>Splice the Fiber</h2>
+            <button id="normalMode">Normal Mode</button>
+            <button id="timeAttackMode">Time Attack</button>
+            <button id="zenMode">Zen Mode</button>
+        </div>
+        <button id="menuButton" style="display: none;">Menu</button> <!-- New button -->
+    </div>
+    <script>
+        class Fiber {
+            constructor(y, speed, color) {
+                this.y = y;
+                this.speed = speed;
+                this.color = color;
+            }
+
+            update() {
+                this.y += this.speed;
+                if (this.y > 400 || this.y < 0) {
+                    this.speed = -this.speed;
+                }
+            }
+
+            draw(ctx) {
+                ctx.beginPath();
+                ctx.moveTo(0, this.y);
+                ctx.lineTo(400, this.y);
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 5;
+                ctx.stroke();
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.vx = Math.random() * 4 - 2;
+                this.vy = Math.random() * 4 - 2;
+                this.radius = Math.random() * 3 + 1;
+                this.color = color;
+                this.life = 30;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life--;
+            }
+
+            draw(ctx) {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+            }
+        }
+
+        class PowerUp {
+            constructor() {
+                this.x = Math.random() * 350 + 25;
+                this.y = Math.random() * 350 + 25;
+                this.type = Math.random() < 0.5 ? 'slow' : 'wide';
+                this.color = this.type === 'slow' ? 'red' : 'orange';
+                this.radius = 10;
+                this.active = false;
+                this.duration = 5000; // 5 seconds
+                this.activatedTime = 0;
+            }
+
+            draw(ctx) {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+            }
+
+            activate(game) {
+                this.active = true;
+                this.activatedTime = Date.now();
+                if (this.type === 'slow') {
+                    game.fibers.forEach(fiber => fiber.speed *= 0.5);
+                } else if (this.type === 'wide') {
+                    game.splicerWidth = 20;
+                }
+            }
+
+            deactivate(game) {
+                this.active = false;
+                if (this.type === 'slow') {
+                    game.fibers.forEach(fiber => fiber.speed *= 2);
+                } else if (this.type === 'wide') {
+                    game.splicerWidth = 10;
+                }
+            }
+        }
+
+        class Game {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.fibers = [
+                    new Fiber(100, 2, 'blue'),
+                    new Fiber(200, -2.5, 'green'),
+                    new Fiber(300, 3, 'purple')
+                ];
+                this.particles = [];
+                this.powerUps = [];
+                this.score = 0;
+                this.highScore = localStorage.getItem('highScore') || 0;
+                this.gameOver = false;
+                this.splicerWidth = 10;
+                this.level = 1;
+                this.mode = 'normal';
+                this.timeLeft = 60; // for time attack mode
+                this.lastPowerUpTime = 0;
+
+                this.spliceSound = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-fast-small-sweep-transition-166.mp3');
+                this.gameOverSound = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-retro-arcade-game-over-470.mp3');
+
+                this.canvas.addEventListener('click', this.splice.bind(this));
+            }
+
+            start(mode) {
+                this.mode = mode;
+                this.gameOver = false;
+                this.score = 0;
+                this.level = 1;
+                this.fibers = [
+                    new Fiber(100, 2, 'blue'),
+                    new Fiber(200, -2.5, 'green'),
+                    new Fiber(300, 3, 'purple')
+                ];
+                this.particles = [];
+                this.powerUps = [];
+                this.splicerWidth = 10;
+                if (mode === 'timeAttack') {
+                    this.timeLeft = 60;
+                }
+                document.getElementById('menu').style.display = 'none';
+                document.getElementById('menuButton').style.display = mode === 'zen' ? 'block' : 'none'; // Show button in Zen mode
+                this.update();
+            }
+
+            update() {
+                if (this.gameOver) return;
+
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+                this.fibers.forEach(fiber => {
+                    fiber.update();
+                    fiber.draw(this.ctx);
+                });
+
+                this.drawSplicer();
+                this.updateParticles();
+                this.updatePowerUps();
+
+                this.ctx.fillStyle = 'black';
+                this.ctx.font = '20px Arial';
+                this.ctx.fillText(`Score: ${this.score}`, 10, 30);
+                this.ctx.fillText(`High Score: ${this.highScore}`, 10, 60);
+                this.ctx.fillText(`Level: ${this.level}`, 10, 90);
+
+                if (this.mode === 'timeAttack') {
+                    this.timeLeft -= 1/60; // Assuming 60 FPS
+                    this.ctx.fillText(`Time: ${Math.ceil(this.timeLeft)}`, 300, 30);
+                    if (this.timeLeft <= 0) {
+                        this.gameOver = true;
+                    }
+                }
+
+                if (Date.now() - this.lastPowerUpTime > 10000 && this.powerUps.length < 2) {
+                    this.powerUps.push(new PowerUp());
+                    this.lastPowerUpTime = Date.now();
+                }
+
+                if (this.score >= this.level * 10) {
+                    this.levelUp();
+                }
+
+                requestAnimationFrame(this.update.bind(this));
+            }
+
+            drawSplicer() {
+                const gradient = this.ctx.createLinearGradient(195, 0, 195 + this.splicerWidth, 0);
+                gradient.addColorStop(0, 'rgba(255, 0, 0, 0.5)');
+                gradient.addColorStop(0.5, 'rgba(255, 0, 0, 1)');
+                gradient.addColorStop(1, 'rgba(255, 0, 0, 0.5)');
+                this.ctx.fillStyle = gradient;
+                this.ctx.fillRect(195, 0, this.splicerWidth, 400);
+            }
+
+            updateParticles() {
+                this.particles = this.particles.filter(p => p.life > 0);
+                this.particles.forEach(p => {
+                    p.update();
+                    p.draw(this.ctx);
+                });
+            }
+
+            updatePowerUps() {
+                this.powerUps = this.powerUps.filter(p => !p.active || Date.now() - p.activatedTime < p.duration);
+                this.powerUps.forEach(p => {
+                    if (p.active && Date.now() - p.activatedTime >= p.duration) {
+                        p.deactivate(this);
+                    }
+                    if (!p.active) {
+                        p.draw(this.ctx);
+                    }
+                });
+            }
+
+            splice(event) {
+                if (this.gameOver) return;
+
+                const rect = this.canvas.getBoundingClientRect();
+                const x = event.clientX - rect.left;
+                const y = event.clientY - rect.top;
+
+                let splicedAny = false;
+
+                // Check if a PowerUp was clicked
+                this.powerUps.forEach((powerUp, index) => {
+                    if (!powerUp.active && Math.sqrt((x - powerUp.x)**2 + (y - powerUp.y)**2) < powerUp.radius) {
+                        powerUp.activate(this);
+                        this.powerUps.splice(index, 1);
+                        splicedAny = true; // Mark as spliced to prevent game over
+                    }
+                });
+
+                // Check if a fiber was spliced
+                this.fibers.forEach(fiber => {
+                    if (Math.abs(fiber.y - y) < this.splicerWidth / 2) {
+                        this.score++;
+                        if (this.score > this.highScore) {
+                            this.highScore = this.score;
+                            localStorage.setItem('highScore', this.highScore);
+                        }
+                        fiber.speed *= 1.1;
+                        this.createParticles(fiber.y, fiber.color);
+                        this.spliceSound.play();
+                        splicedAny = true;
+                    }
+                });
+
+                // End game if no fiber or PowerUp was spliced
+                if (!splicedAny && this.mode !== 'zen') {
+                    this.gameOver = true;
+                    this.gameOverSound.play();
+                    this.ctx.fillStyle = 'black';
+                    this.ctx.font = '30px Arial';
+                    this.ctx.fillText('Game Over!', 130, 200);
+                    setTimeout(() => {
+                        document.getElementById('menu').style.display = 'block';
+                    }, 2000);
+                }
+            }
+
+            createParticles(y, color) {
+                for (let i = 0; i < 20; i++) {
+                    this.particles.push(new Particle(200, y, color));
+                }
+            }
+
+            levelUp() {
+                this.level++;
+                if (this.mode !== 'zen') {
+                    this.fibers.push(new Fiber(
+                        Math.random() * 400,
+                        (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 2 + 2),
+                        `hsl(${Math.random() * 360}, 50%, 50%)`
+                    ));
+                }
+            }
+        }
+
+        const game = new Game();
+
+        document.getElementById('normalMode').addEventListener('click', () => game.start('normal'));
+        document.getElementById('timeAttackMode').addEventListener('click', () => game.start('timeAttack'));
+        document.getElementById('zenMode').addEventListener('click', () => game.start('zen'));
+
+        document.getElementById('menuButton').addEventListener('click', () => {
+            document.getElementById('menu').style.display = 'block';
+            game.gameOver = true; // Pause the game
+        });
+    </script>
+</body>
+</html>
